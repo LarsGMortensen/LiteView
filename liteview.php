@@ -51,13 +51,12 @@ class liteview {
      * @param bool $remove_comments Whether to remove template comments
      * @param bool $remove_html_comments Whether to remove HTML comments
      */
-    public function __construct(string $theme, string $template_path, bool $cache_enabled, string $cache_path, bool $trim_whitespace = false, bool $remove_comments = false, bool $remove_html_comments = false) {
+    public function __construct(string $theme, string $template_path, bool $cache_enabled, string $cache_path, bool $trim_whitespace = false, bool $remove_html_comments = false) {
         $this->theme = $theme;
         $this->template_path = rtrim($template_path, '/') . '/';
         $this->cache_enabled = $cache_enabled;
         $this->cache_path = rtrim($cache_path, '/') . '/';
         $this->trim_whitespace = $trim_whitespace;
-        $this->remove_comments = $remove_comments;
         $this->remove_html_comments = $remove_html_comments;
     }
 
@@ -80,8 +79,11 @@ class liteview {
      * @return string Path to the compiled PHP file
      */
     private function compile(string $template): string {
+        // $source_path = CITOMNI_SYSTEM_PATH . "/app/views/templates/{$this->theme}/$template";
         $source_path = $this->template_path . $this->theme . '/' . $template;
         $cache_file = $this->cache_path . str_replace(['/', '.html'], ['_', ''], $template) . '.php';
+		
+		// exit($source_path);
 
         // Return cached file if it exists and is up-to-date
         if ($this->cache_enabled && file_exists($cache_file) && @filemtime($source_path) <= filemtime($cache_file)) {
@@ -90,17 +92,25 @@ class liteview {
 
         // Load and process the template file
         $code = file_get_contents($source_path);
-        $code = $this->process_extends($code);
+
+		// Processes template inheritance, allowing child templates to extend parent templates
+        $code = $this->process_extends($code);		
+
+		// Removes template comments ({# ... #}) from the code
+		$code = $this->remove_comments($code);
+
+		// Includes external template files ({% include "file.html" %})
         $code = $this->process_includes($code);
+		
+		// Compiles template syntax into PHP code
         $code = $this->compile_syntax($code);
 
-        // Apply optional modifications
-        if ($this->remove_comments) {
-            $code = $this->remove_comments($code);
-        }
+        // Removes HTML comments (<!-- ... -->) if enabled
         if ($this->remove_html_comments) {
-            $code = $this->remove_html_comments($code);
+            $code = $this->remove_html_comments($code);			
         }
+		
+		// Removes unnecessary whitespace to optimize output
         if ($this->trim_whitespace) {
             $code = preg_replace('/\s+/', ' ', $code);
         }
@@ -116,9 +126,29 @@ class liteview {
      * @param string $code Template code
      * @return string Processed template code
      */
-    private function process_extends(string $code): string {
-        return preg_replace('/{% extends "(.*?)" %}/', '', $code);
-    }
+	private function process_extends(string $code): string {
+		if (preg_match('/{% extends "(.*?)" %}/', $code, $match)) {
+			$layout_file = $this->template_path . $this->theme . '/' . $match[1];
+			if (file_exists($layout_file)) {
+				$layout_code = file_get_contents($layout_file);
+				return $this->merge_blocks($layout_code, $code);
+			}
+		}
+		return $code;
+	}
+
+	/**
+	 * Merge child template blocks into the parent layout.
+	 */
+	private function merge_blocks(string $layout_code, string $child_code): string {
+		preg_match_all('/{%\s*block\s*(\w+)\s*%}(.*?){%\s*endblock\s*%}/s', $child_code, $matches, PREG_SET_ORDER);
+		foreach ($matches as $match) {
+			$block_name = $match[1];
+			$block_content = trim($match[2]);
+			$layout_code = preg_replace('/{%\s*yield\s*' . $block_name . '\s*%}/', $block_content, $layout_code);
+		}
+		return $layout_code;
+	}
 
     /**
      * Processes `{% include ... %}` directives and inserts the included file content.
@@ -128,6 +158,7 @@ class liteview {
      */
     private function process_includes(string $code): string {
         return preg_replace_callback('/{% include "(.*?)" %}/i', function ($matches) {
+            //return file_get_contents(CITOMNI_SYSTEM_PATH . "/app/views/templates/{$this->theme}/{$matches[1]}");
             return file_get_contents($this->template_path . $this->theme . '/' . $matches[1]);
         }, $code);
     }
@@ -140,33 +171,82 @@ class liteview {
      */
     private function compile_syntax(string $code): string {
         $patterns = [
-            '/{%\s*block\s*(\w+)\s*%}/' => '<?php ob_start(); ?>',
-            '/{%\s*endblock\s*%}/' => '<?php $this->blocks["$1"] = ob_get_clean(); ?>',
+			'/{%\s*block\s+([\w-]+)\s*%}/' => '<?php ob_start(); $this->blocks["$1"] = ""; ?>',
+			'/{%\s*endblock\s*%}/' => '<?php $this->blocks[array_key_last($this->blocks)] = ob_get_clean(); ?>',
             '/{%\s*yield\s*(\w+)\s*%}/' => '<?php echo $this->blocks["$1"] ?? ""; ?>',
             '/\{{{\s*(.+?)\s*}}}/'  => '<?php echo htmlentities($1, ENT_QUOTES, "UTF-8"); ?>',
             '/\{{\s*(.+?)\s*}}/'    => '<?php echo $1; ?>',
             '/{%\s*if\s*(.+?)\s*%}/' => '<?php if ($1): ?>',
             '/{%\s*elseif\s*(.+?)\s*%}/' => '<?php elseif ($1): ?>',
             '/{%\s*else\s*%}/' => '<?php else: ?>',
-            '/{%\s*endif\s*%}/' => '<?php endif; ?>',
-            '/{%\s*foreach\s*(.+?)\s*%}/' => '<?php foreach ($1): ?>',
-            '/{%\s*endforeach\s*%}/' => '<?php endforeach; ?>',
+            '/{%\s*endif\s*%}/' => '<?php endif; ?>',			
+			'/{%\s*foreach\s*\((.+?)\)\s*%}/' => '<?php foreach ($1): ?>',
+			'/{%\s*endforeach\s*%}/' => '<?php endforeach; ?>',
         ];
         return preg_replace(array_keys($patterns), array_values($patterns), $code);
     }
+		
+	/**
+	 * Removes `{# ... #}` comments from template code, including nested comments.
+	 * 
+	 * This function efficiently removes comments using a single pass through the string,
+	 * making it faster than regex-based solutions. It also includes an early exit 
+	 * optimization to avoid unnecessary processing when no `{#` is found.
+	 * 
+	 * @param string $code The template code containing comments.
+	 * @return string The cleaned template code with all comments removed.
+	 */
+	private function remove_comments(string $code): string {
+		// Early exit: If there are no `{#` markers, return the string immediately.
+		if (strpos($code, '{#') === false) {
+			return $code;
+		}
 
-    /**
-     * Removes `{# ... #}` template comments.
-     */
-    private function remove_comments(string $code): string {
-        return preg_replace('/{#.*?#}/s', '', $code);
-    }
+		$len = strlen($code); // Total length of the string
+		$depth = 0;           // Tracks nested comment levels
+		$start = 0;           // Start position for capturing output
+		$output = '';         // Buffer for the final output
+
+		for ($i = 0; $i < $len; $i++) {
+			// Detect the start of a comment block `{#`
+			if ($i < $len - 1 && $code[$i] === '{' && $code[$i + 1] === '#') {
+				if ($depth === 0) {
+					// Append the content before the comment starts
+					$output .= substr($code, $start, $i - $start);
+				}
+				$depth++; // Increase nesting level
+				$i++; // Skip the next character `#`
+				continue;
+			}
+
+			// Detect the end of a comment block `#}`
+			if ($i < $len - 1 && $code[$i] === '#' && $code[$i + 1] === '}' && $depth > 0) {
+				$depth--; // Decrease nesting level
+				$i++; // Skip the next character `}`
+				$start = $i + 1; // Set new start position after the comment
+				continue;
+			}
+
+			// If not inside a comment, add the character to the output buffer
+			if ($depth === 0) {
+				$output .= $code[$i];
+			}
+		}
+
+		// Append any remaining content after the last comment
+		if ($depth === 0 && $start < $len) {
+			$output .= substr($code, $start);
+		}
+
+		return $output;
+	}
 
     /**
      * Removes `<!-- ... -->` HTML comments.
      */
-    private function remove_html_comments(string $code): string {
-        return preg_replace('/<!--.*?-->/s', '', $code);
+    public function remove_html_comments(string $code): string {
+        // return preg_replace('/<!--.*?-->/s', '', $code);
+		return preg_replace('/<!--(?!<!)[^\[>].*?-->/s', '', $code);
     }
 
     /**
