@@ -19,13 +19,25 @@ It provides an intuitive syntax inspired by modern template engines like Blade a
 ### PHP  
 ```php
 $liteview = new liteview('default_theme', '/path/to/templates', true, '/path/to/cache');
-$liteview->render('home.html', [
+$liteview->render('index.html', [
     'title' => 'Home Page',
     'colors' => ['red', 'blue', 'green']
 ]);
 ```
 
-### Template (`home.html`)  
+### Layout template (`layout.html`)
+```html
+<html>
+<head>
+    <title>{% yield title %}</title>
+</head>
+<body>
+    {% yield content %}
+</body>
+</html>
+```
+
+### Page template (`index.html`)  
 ```html
 {% extends "layout.html" %}
 
