@@ -79,12 +79,9 @@ class liteview {
      * @return string Path to the compiled PHP file
      */
     private function compile(string $template): string {
-        // $source_path = CITOMNI_SYSTEM_PATH . "/app/views/templates/{$this->theme}/$template";
         $source_path = $this->template_path . $this->theme . '/' . $template;
         $cache_file = $this->cache_path . str_replace(['/', '.html'], ['_', ''], $template) . '.php';
 		
-		// exit($source_path);
-
         // Return cached file if it exists and is up-to-date
         if ($this->cache_enabled && file_exists($cache_file) && @filemtime($source_path) <= filemtime($cache_file)) {
             return $cache_file;
@@ -187,49 +184,47 @@ class liteview {
     }
 		
 	/**
-	 * Removes `{# ... #}` comments from template code, including nested comments.
-	 * 
-	 * This function efficiently removes comments using a single pass through the string,
-	 * making it faster than regex-based solutions. It also includes an early exit 
-	 * optimization to avoid unnecessary processing when no `{#` is found.
-	 * 
-	 * @param string $code The template code containing comments.
+	 * Removes `{# ... #}` comments from the template while preserving the correct structure.
+	 *
+	 * This function efficiently removes comments from the template without affecting the surrounding
+	 * content. It correctly handles nested comments and ensures that no duplicated content appears.
+	 *
+	 * - Uses a single pass (`O(n)`) for optimal performance.
+	 * - Supports nested `{# ... #}` comments.
+	 * - Ensures that non-comment content is preserved exactly as in the original template.
+	 *
+	 * @param string $code The template code containing `{# ... #}` comments.
 	 * @return string The cleaned template code with all comments removed.
 	 */
-	private function remove_comments(string $code): string {
-		// Early exit: If there are no `{#` markers, return the string immediately.
+	function remove_comments(string $code): string {
+		// Early exit: If no `{#` is found, return immediately (no comments to remove)
 		if (strpos($code, '{#') === false) {
 			return $code;
 		}
 
-		$len = strlen($code); // Total length of the string
-		$depth = 0;           // Tracks nested comment levels
-		$start = 0;           // Start position for capturing output
-		$output = '';         // Buffer for the final output
+		$len = strlen($code); // Get the length of the template
+		$depth = 0;           // Tracks the nesting level of comments
+		$start = 0;           // Start position for capturing content outside comments
+		$output = '';         // Buffer to store the final cleaned template
 
 		for ($i = 0; $i < $len; $i++) {
 			// Detect the start of a comment block `{#`
 			if ($i < $len - 1 && $code[$i] === '{' && $code[$i + 1] === '#') {
 				if ($depth === 0) {
-					// Append the content before the comment starts
+					// Append content before the comment starts
 					$output .= substr($code, $start, $i - $start);
 				}
 				$depth++; // Increase nesting level
-				$i++; // Skip the next character `#`
+				$i++;     // Skip the next character (`#`)
 				continue;
 			}
 
 			// Detect the end of a comment block `#}`
 			if ($i < $len - 1 && $code[$i] === '#' && $code[$i + 1] === '}' && $depth > 0) {
-				$depth--; // Decrease nesting level
-				$i++; // Skip the next character `}`
-				$start = $i + 1; // Set new start position after the comment
+				$depth--;  // Decrease nesting level
+				$i++;      // Skip the next character (`}`)
+				$start = $i + 1; // Update the start position to resume capturing content
 				continue;
-			}
-
-			// If not inside a comment, add the character to the output buffer
-			if ($depth === 0) {
-				$output .= $code[$i];
 			}
 		}
 
