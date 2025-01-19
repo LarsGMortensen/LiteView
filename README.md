@@ -18,14 +18,14 @@ It provides an intuitive syntax inspired by modern template engines like Blade a
 
 ### PHP  
 ```php
-$engine = new liteview('default_theme', true, '/path/to/cache');
-$engine->render('about.html', [
+$liteview = new liteview('default_theme', '/path/to/templates', true, '/path/to/cache');
+$liteview->render('home.html', [
     'title' => 'Home Page',
     'colors' => ['red', 'blue', 'green']
 ]);
 ```
 
-### Template (`about.html`)  
+### Template (`home.html`)  
 ```html
 {% extends "layout.html" %}
 
