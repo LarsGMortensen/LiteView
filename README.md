@@ -9,20 +9,32 @@ It provides an intuitive syntax inspired by modern template engines like Blade a
 ✔ **Blocks & Yield** – Supports template inheritance for reusable layouts.  
 ✔ **Conditionals & Loops** – Native `{% if %}`, `{% foreach %}`, and `{% endif %}` syntax.  
 ✔ **Safe Output** – Escaping with `{{{ variable }}}` to prevent XSS attacks.  
-✔ **Minimal Overhead** – Designed for maximum performance with minimal dependencies.  
+✔ **Minimal Overhead** – Designed for maximum performance with no dependencies.  
 ✔ **Flexible Configuration** – Supports whitespace trimming and comment removal.  
+✔ **Static API** – Fully static, no instantiation required.
 
+---
+
+## 🔧 Installation  
+Simply include `liteview.php` in your project and start rendering templates!  
+```php
+require_once 'LiteView.php';
+```
 ---
 
 ## 📌 Example Usage  
 
 ### PHP  
 ```php
-$liteview = new liteview('default_theme', '/path/to/templates', true, '/path/to/cache');
-$liteview->render('index.html', [
-    'title' => 'Home Page',
-    'colors' => ['red', 'blue', 'green']
-]);
+LiteView::render(
+    'index.html',             // Template filename
+    '/path/to/templates/',    // Template directory
+    true,                     // Enable caching
+    '/path/to/cache/',        // Cache directory
+    true,                     // Trim whitespace
+    true,                     // Remove HTML comments
+    ['title' => 'Home Page']  // Template variables
+);
 ```
 
 ### Layout template (`layout.html`)
@@ -57,12 +69,7 @@ $liteview->render('index.html', [
 {% endblock %}
 ```
 
----
 
-## 🛠 Installation  
-Simply include `liteview.php` in your project and start rendering templates!  
-
----
 
 ## 📖 User Guide  
 
@@ -179,14 +186,20 @@ HELLO WORLD
 
 ---
 
-### Clearing the Cache  
-To clear the cache, execute the following PHP-code:  
+## 🔥 Clearing the Cache
+
+To clear all compiled template files from the cache directory, use:
 ```php
-$engine->clear_cache();
+LiteView::clear_cache();
 ```
+This will delete all cached PHP files, forcing templates to be recompiled on the next request.
 
 ---
 
-## 💡 Why LiteView?  
+## 💡 Why LiteView?
+
 Unlike Twig or Smarty, LiteView **prioritizes performance** and has **zero unnecessary dependencies**.  
-It is the perfect choice for developers who need a **simple, flexible, and fast** template engine for PHP applications.
+It is the perfect choice for developers who need a **simple, flexible, and fast** template engine for PHP applications.  
+Now **fully static**, ensuring maximum performance and simplicity!
+
+---
