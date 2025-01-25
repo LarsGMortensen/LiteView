@@ -203,3 +203,17 @@ It is the perfect choice for developers who need a **simple, flexible, and fast*
 Now **fully static**, ensuring maximum performance and simplicity!
 
 ---
+
+
+## License
+LiteMySQLi is released under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for details.
+
+## Contributing
+Contributions are welcome! Feel free to fork this repository, submit issues, or open a pull request.
+
+## Author
+Developed by **Lars Grove Mortensen** © 2025. Feel free to reach out or contribute!
+
+---
+
+🌟 **If you find this library useful, give it a star on GitHub!** 🌟
