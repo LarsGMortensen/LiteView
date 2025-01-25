@@ -202,11 +202,8 @@ Unlike Twig or Smarty, LiteView **prioritizes performance** and has **zero unnec
 It is the perfect choice for developers who need a **simple, flexible, and fast** template engine for PHP applications.  
 Now **fully static**, ensuring maximum performance and simplicity!
 
----
-
-
 ## License
-LiteMySQLi is released under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for details.
+LiteView is released under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 Contributions are welcome! Feel free to fork this repository, submit issues, or open a pull request.
