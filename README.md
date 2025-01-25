@@ -22,7 +22,7 @@ require_once 'LiteView.php';
 ```
 ---
 
-## 📌 Example Usage  
+## 📌 Usage  
 
 ### PHP  
 ```php
@@ -71,9 +71,9 @@ LiteView::render(
 
 
 
-## 📖 User Guide  
+## 📖 User guide  
 
-### Secure Output  
+### Secure output  
 You can escape output using the `htmlspecialchars` function by using triple curly brackets:  
 ```html
 {{{ output }}}
@@ -82,7 +82,7 @@ This ensures special characters are not executed as HTML.
 
 ---
 
-### Include Additional Templates  
+### Include additional templates  
 ```html
 {% include "forms.html" %}
 ```
@@ -147,7 +147,7 @@ Blocks allow reusable sections in templates. `{% yield %}` is used to insert blo
 
 ---
 
-### Whitespace Trimming  
+### Whitespace trimming  
 If whitespace trimming is enabled, unnecessary spaces, tabs, and new lines are removed automatically.  
 #### **Before:**
 ```html
@@ -160,7 +160,7 @@ If whitespace trimming is enabled, unnecessary spaces, tabs, and new lines are r
 
 ---
 
-### Removing HTML Comments  
+### Removing HTML comments  
 If enabled, all `<!-- HTML comments -->` are removed from the output.  
 #### **Before:**
 ```html
@@ -186,7 +186,7 @@ HELLO WORLD
 
 ---
 
-## 🔥 Clearing the Cache
+## 🔥 Clearing the cache
 
 To clear all compiled template files from the cache directory, use:
 ```php
