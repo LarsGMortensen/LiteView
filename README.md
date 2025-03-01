@@ -33,7 +33,7 @@ LiteView::render(
     '/path/to/cache/',        // Cache directory
     true,                     // Trim whitespace
     true,                     // Remove HTML comments
-    ['title' => 'Home Page']  // Template variables
+    ['meta_title' => 'Home Page']  // Template variables
 );
 ```
 
@@ -53,7 +53,7 @@ LiteView::render(
 ```html
 {% extends "layout.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ $meta_title }}{% endblock %}
 
 {% block content %}
     <h1>Home</h1>
