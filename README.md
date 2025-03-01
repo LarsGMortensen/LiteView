@@ -62,8 +62,8 @@ LiteView::render(
         <div>Do something</div>
     {% endif %}
     <ul>
-        {% foreach (colors as color) %}
-        <li>{{ color }}</li>
+        {% foreach ($colors as $color) %}
+        <li>{{ $color }}</li>
         {% endforeach %}
     </ul>
 {% endblock %}
@@ -140,8 +140,8 @@ Blocks allow reusable sections in templates. `{% yield %}` is used to insert blo
 
 ### Loops  
 ```html
-{% foreach (colors as color) %}
-    <li>{{ color }}</li>
+{% foreach ($colors as $color) %}
+    <li>{{ $color }}</li>
 {% endforeach %}
 ```
 
