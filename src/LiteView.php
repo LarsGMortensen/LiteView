@@ -21,6 +21,10 @@
  * along with LiteView. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
+namespace LiteView;
+
+
 class LiteView {
 	
 	/** @var string Path to the templates directory */
@@ -62,13 +66,20 @@ class LiteView {
 		self::$cache_enabled = $cache_enabled;
 		self::$cache_path = rtrim($cache_path, '/') . '/';
 		self::$trim_whitespace = $trim_whitespace;
-		self::$remove_html_comments = $remove_html_comments;		
+		self::$remove_html_comments = $remove_html_comments;
 		
 		// Compile the template if necessary
 		$compiled_file = self::compile($template);
 		
-		// Extract template variables safely
+		// Extract template variables
 		extract($data, EXTR_SKIP);
+		
+		// Extract template variables safer (but slower)
+		// foreach ($data as $key => $value) {
+			// if (!isset($$key)) {
+				// $$key = $value;
+			// }
+		// }
 		
 		// Include the compiled PHP file
 		require $compiled_file;
@@ -221,6 +232,12 @@ class LiteView {
 	 */
 	private static function compile_syntax(string $code): string {
 		$patterns = [
+		
+			// Executes and outputs (echo) the result of a PHP expression: {?= ... ?}
+			'/{\?=\s*(.+?)\s*\?}/s' => '<?php echo $1; ?>',
+		
+			// Execute PHP code (no output): {? ... ?}
+			'/{\?(.+?)\?}/s' => '<?php$1?>',
 		
 			// Block definition: {% block name %}
 			'/{%\s*block\s+([\w-]+)\s*%}/' => '<?php ob_start(); self::$blocks["$1"] = ""; ?>',
