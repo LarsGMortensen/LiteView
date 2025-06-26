@@ -29,14 +29,19 @@ class LiteView {
 	
 	/** @var string Path to the templates directory */
 	private static string $template_path;
+	
 	/** @var string Path to the cache directory */
 	private static string $cache_path;
+	
 	/** @var bool Whether caching is enabled */
 	private static bool $cache_enabled;
+	
 	/** @var bool Whether to trim unnecessary whitespace */
 	private static bool $trim_whitespace;
+	
 	/** @var bool Whether to remove HTML comments */
 	private static bool $remove_html_comments;
+	
 	/** @var array Stores block contents */
 	private static array $blocks = [];
 	
@@ -355,4 +360,3 @@ class LiteView {
 		array_map('unlink', $files);
 	}
 }
-
