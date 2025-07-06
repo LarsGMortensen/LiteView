@@ -8,7 +8,7 @@ It provides an intuitive syntax inspired by modern template engines like Blade a
 ✔ **Caching System** – Reduces processing time by storing compiled templates.  
 ✔ **Blocks & Yield** – Supports template inheritance for reusable layouts.  
 ✔ **Conditionals & Loops** – Native `{% if %}`, `{% foreach %}`, and `{% endif %}` syntax.  
-✔ **Safe Output** – Escaping with `{{{ variable }}}` to prevent XSS attacks.  
+✔ **Safe Output** – Escaping with `{{ variable }}` to prevent XSS attacks.  
 ✔ **Minimal Overhead** – Designed for maximum performance with no dependencies.  
 ✔ **Flexible Configuration** – Supports whitespace trimming and comment removal.  
 ✔ **Static API** – Fully static, no instantiation required.
@@ -74,11 +74,17 @@ LiteView::render(
 ## 📖 User guide  
 
 ### Secure output  
-You can escape output using the `htmlspecialchars` function by using triple curly brackets:  
+You can escape output using the `htmlentities` function by using double curly brackets:
+```html
+{{ output }}
+```
+This ensures special characters are not executed as HTML and prevents XSS attacks.
+
+If you need to output raw (unescaped) HTML (for example, when inserting trusted markup), use triple curly brackets:
 ```html
 {{{ output }}}
 ```
-This ensures special characters are not executed as HTML.
+**Warning:** Only use triple curly brackets for trusted content!
 
 ---
 
@@ -201,6 +207,8 @@ This will delete all cached PHP files, forcing templates to be recompiled on the
 Unlike Twig or Smarty, LiteView **prioritizes performance** and has **zero unnecessary dependencies**.  
 It is the perfect choice for developers who need a **simple, flexible, and fast** template engine for PHP applications.  
 Now **fully static**, ensuring maximum performance and simplicity!
+
+NOTE: LiteView follows standard template escaping: `{{ ... }}` is always HTML-escaped, `{{{ ... }}}` is unescaped/raw.
 
 ## License
 LiteView is released under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for details.
