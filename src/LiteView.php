@@ -257,7 +257,7 @@ class LiteView {
 			'/\{{{\s*(.+?)\s*}}}/'  => '<?php echo $1; ?>',			
 			
 			// Escaped variable output: {{ variable }} (HTML-escaped)
-			'/\{{\s*(.+?)\s*}}/'    => '<?php echo htmlentities($1 ?? "", ENT_QUOTES, "UTF-8"); ?>',
+			'/\{{\s*(.+?)\s*}}/'    => '<?php echo htmlspecialchars($1 ?? "", ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8"); ?>',
 			
 			// Conditional statements:
 			'/{%\s*if\s*(.+?)\s*%}/' => '<?php if ($1): ?>',
