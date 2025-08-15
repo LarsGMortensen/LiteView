@@ -45,6 +45,9 @@ class LiteView {
 	/** @var array Stores block contents */
 	private static array $blocks = [];
 	
+	/** Maximum include recursion depth (prevents circular includes). */
+	private const MAX_INCLUDE_DEPTH = 16;
+	
 
 	/**
 	 * Renders a template with the given parameters and compiles it if necessary.
@@ -89,7 +92,8 @@ class LiteView {
 		// Include the compiled PHP file
 		require $compiled_file;
 	}	
-	
+
+
 	/**
 	 * Compiles a template file into a cached PHP file.
 	 *
@@ -101,7 +105,6 @@ class LiteView {
 	 * @param string $template The template filename (e.g., 'home.html').
 	 * @return string The full path to the compiled PHP file.
 	 *
-	 * @throws RuntimeException If the template file does not exist or cannot be read.
 	 */
 	private static function compile(string $template): string {
 		
@@ -119,12 +122,12 @@ class LiteView {
 		// Load and process the template file
 		$code = file_get_contents($source_path);
 
-		// Processes template inheritance, allowing child templates to extend parent templates
-		$code = self::process_extends($code);
-
 		// Removes template comments ({# ... #}) from the code
 		$code = self::remove_comments($code);
 
+		// Processes template inheritance, allowing child templates to extend parent templates
+		$code = self::process_extends($code);
+		
 		// Includes external template files ({% include "file.html" %})
 		$code = self::process_includes($code);
 
@@ -146,6 +149,7 @@ class LiteView {
 		return $cache_file;
 	}
 
+
 	/**
 	 * Processes `{% extends "parent.html" %}` directives for template inheritance.
 	 *
@@ -157,8 +161,11 @@ class LiteView {
 	 */
 	private static function process_extends(string $code): string {
 		
+		// Early exit: If no `{% extends` is found, return immediately (no extends to process)
+		if (strpos($code, '{% extends') === false) return $code;
+		
 		// Check if the template contains an `{% extends "..." %}` directive
-		if (preg_match('/{% extends "(.*?)" %}/', $code, $match)) {
+		if (preg_match('/{% extends ["\'](.*?)["\'] %}/', $code, $match)) {
 			
 			// Construct the full path to the parent (layout) template
 			$layout_file = self::$template_path . $match[1];
@@ -169,6 +176,9 @@ class LiteView {
 				// Load the parent template content
 				$layout_code = file_get_contents($layout_file);
 				
+				// Removes template comments ({# ... #}) from the layout_code
+				$layout_code = self::remove_comments($layout_code);
+				
 				// Merge the child template's blocks into the parent layout
 				return self::merge_blocks($layout_code, $code);
 			}
@@ -177,6 +187,7 @@ class LiteView {
 		// If no `{% extends %}` is found, return the original template unchanged
 		return $code;
 	}
+
 
 	/**
 	 * Merges child template blocks into the parent layout.
@@ -206,6 +217,7 @@ class LiteView {
 		return $layout_code;
 	}	
 
+
 	/**
 	 * Processes `{% include "filename" %}` directives and replaces them 
 	 * with the contents of the specified template file.
@@ -214,17 +226,33 @@ class LiteView {
 	 *
 	 * @param string $code The template code containing `{% include "file.html" %}` directives.
 	 * @return string Processed template code with included files inserted.
-	 */
-	private static function process_includes(string $code): string {
+	 */	
+	private static function process_includes(string $code, int $depth = 0): string {
 		
+		// Fast path: nothing to do
+		if (strpos($code, '{% include') === false) return $code;
+
+		// Prevent circular includes
+		if ($depth >= self::MAX_INCLUDE_DEPTH) {
+			throw new \RuntimeException('LiteView include depth exceeded.');
+		}
+
 		// Search for `{% include "filename" %}` and replace it with the actual file contents
-		return preg_replace_callback('/{% include "(.*?)" %}/i', function ($matches) {
-			
-			// Load and return the content of the included template file
-			return file_get_contents(self::$template_path . $matches[1]);
-			
+		return preg_replace_callback('/{% include ["\'](.*?)["\'] %}/i', function ($matches) use ($depth) {
+
+			// Load the content of the included template file
+			$include_code = file_get_contents(self::$template_path . $matches[1]);
+
+			// Strip comments in the snippet to avoid activating commented includes
+			$include_code = self::remove_comments($include_code);
+
+			// Recurse: process includes inside the snippet
+			$include_code = self::process_includes($include_code, $depth + 1);
+
+			return $include_code;
 		}, $code);
 	}
+	
 
 	/**
 	 * Compiles template syntax into executable PHP code.
@@ -242,7 +270,7 @@ class LiteView {
 			'/{\?=\s*(.+?)\s*\?}/s' => '<?php echo $1; ?>',
 		
 			// Execute PHP code (no output): {? ... ?}
-			'/{\?(.+?)\?}/s' => '<?php$1?>',
+			'/{\?(.+?)\?}/s' => '<?php $1 ?>',
 		
 			// Block definition: {% block name %}
 			'/{%\s*block\s+([\w-]+)\s*%}/' => '<?php ob_start(); self::$blocks["$1"] = ""; ?>',
@@ -254,10 +282,10 @@ class LiteView {
 			'/{%\s*yield\s*(\w+)\s*%}/' => '<?php echo self::$blocks["$1"] ?? ""; ?>',
 			
 			// Unescaped variable output: {{{ variable }}}
-			'/\{{{\s*(.+?)\s*}}}/'  => '<?php echo $1; ?>',			
+			'/\{\{\{\s*(.+?)\s*\}\}\}/' => '<?php echo $1; ?>',
 			
 			// Escaped variable output: {{ variable }} (HTML-escaped)
-			'/\{{\s*(.+?)\s*}}/'    => '<?php echo htmlspecialchars($1 ?? "", ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8"); ?>',
+			'/\{\{\s*(.+?)\s*\}\}/' => '<?php echo htmlspecialchars($1 ?? "", ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8"); ?>',
 			
 			// Conditional statements:
 			'/{%\s*if\s*(.+?)\s*%}/' => '<?php if ($1): ?>',
@@ -273,7 +301,8 @@ class LiteView {
 		// Apply all regex replacements to the template code
 		return preg_replace(array_keys($patterns), array_values($patterns), $code);
 	}
-		
+
+
 	/**
 	 * Removes `{# ... #}` comments from the template while preserving the correct structure.
 	 *
@@ -288,6 +317,7 @@ class LiteView {
 	 * @return string The cleaned template code with all comments removed.
 	 */
 	private static function remove_comments(string $code): string {
+				
 		// Early exit: If no `{#` is found, return immediately (no comments to remove)
 		if (strpos($code, '{#') === false) {
 			return $code;
@@ -327,6 +357,7 @@ class LiteView {
 		return $output;
 	}
 
+
 	/**
 	 * Removes `<!-- ... -->` HTML comments from the template.
 	 * 
@@ -346,6 +377,7 @@ class LiteView {
 		// - `s` modifier ? Allows `.` to match newlines, so multi-line comments are removed properly.
 		return preg_replace('/<!--(?!<!)[^\[>].*?-->/s', '', $code);
 	}
+
 
 	/**
 	 * Clears all cached templates.
