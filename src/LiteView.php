@@ -120,7 +120,6 @@ class LiteView {
 	private const MAX_INCLUDE_DEPTH = 16;
 
 
-
 	/**
 	 * Render a template directly (echo to output buffer).
 	 *
