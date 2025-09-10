@@ -121,8 +121,6 @@ class LiteView {
 
 
 
-//En anden lille rettelse i upstream filen
-
 	/**
 	 * Render a template directly (echo to output buffer).
 	 *
