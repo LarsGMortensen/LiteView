@@ -120,6 +120,9 @@ class LiteView {
 	private const MAX_INCLUDE_DEPTH = 16;
 
 
+
+//En anden lille rettelse i upstream filen
+
 	/**
 	 * Render a template directly (echo to output buffer).
 	 *
