@@ -21,374 +21,672 @@
  * along with LiteView. If not, see <https://www.gnu.org/licenses/>.
  */
 
+declare(strict_types=1);
 
 namespace LiteView;
 
 
+/**
+ * LiteView — Lightweight PHP template engine.
+ *
+ * LiteView is a minimal, single-file template compiler designed for high performance
+ * and low overhead. It provides template inheritance, includes, variable output,
+ * and basic control structures using a compact syntax.
+ *
+ * ## Key Features
+ * - Zero dependencies: self-contained, PSR-4 compatible.
+ * - Template inheritance: `{% extends "layout.html" %}`, `{% block name %}`, `{% yield name %}`.
+ * - Includes: `{% include "snippet.html" %}` with recursion depth protection.
+ * - Variable output:
+ *   - Escaped: `{{ variable }}`
+ *   - Raw: `{{{ variable }}}`
+ *   - PHP expression: `{?= expr ?}`
+ * - Control structures: `{% if %}`, `{% else %}`, `{% endif %}`, `{% foreach (...) %}`, `{% endforeach %}`.
+ * - Comment removal:
+ *   - Template comments `{# ... #}`
+ *   - HTML comments `<!-- ... -->` (optional, safe for conditional comments).
+ * - Whitespace trimming: optional, skips sensitive tags (<pre>, <code>, <textarea>, <script>, <style>).
+ * - Caching:
+ *   - Compiles templates to PHP files in a cache directory.
+ *   - Dependency-aware cache invalidation (extends + includes).
+ *   - Cache files guarded against direct web execution.
+ *
+ * ## Security Notes
+ * - Templates are considered **trusted code**.
+ *   - `{? code ?}` executes raw PHP. Disable in production by setting `$allowPhpTags = false`.
+ *   - Variable output is HTML-escaped by default (`{{ }}`).
+ * - Always place `cachePath` **outside webroot**, or restrict access (e.g., with `.htaccess`).
+ *
+ * ## Typical Usage
+ * ```php
+ * use LiteView\LiteView;
+ *
+ * // Echo output directly
+ * LiteView::render(
+ *     'home.html',
+ *     __DIR__ . '/../templates',
+ *     true,
+ *     __DIR__ . '/../var/cache/liteview',
+ *     true,
+ *     true,
+ *     ['title' => 'Hello World']
+ * );
+ *
+ * // Capture output as string
+ * $html = LiteView::renderToString(
+ *     'page.html',
+ *     __DIR__ . '/../templates',
+ *     true,
+ *     __DIR__ . '/../var/cache/liteview',
+ *     false,
+ *     false,
+ *     ['user' => $user],
+ *     false // disallow raw PHP blocks
+ * );
+ * ```
+ *
+ * ## API
+ * - {@see LiteView::render()}         Echo template directly.
+ * - {@see LiteView::renderToString()} Render and return as string.
+ * - {@see LiteView::clearCache()}     Delete all compiled templates in cache.
+ *
+ * ## Limitations
+ * - Not sandboxed: do not expose to untrusted template authors.
+ * - Feature scope is deliberately minimal (no filters/tests/extensions).
+ *   Intended for lightweight apps, not as a Twig replacement.
+ *
+ */
 class LiteView {
-	
-	/** @var string Path to the templates directory */
-	private static string $template_path;
-	
-	/** @var string Path to the cache directory */
-	private static string $cache_path;
-	
+
+	/** @var string Absolute path to the templates directory (with trailing slash) */
+	private static string $templatePath;
+
+	/** @var string Absolute path to the cache directory (with trailing slash) */
+	private static string $cachePath;
+
 	/** @var bool Whether caching is enabled */
-	private static bool $cache_enabled;
-	
-	/** @var bool Whether to trim unnecessary whitespace */
-	private static bool $trim_whitespace;
-	
-	/** @var bool Whether to remove HTML comments */
-	private static bool $remove_html_comments;
-	
-	/** @var array Stores block contents */
-	private static array $blocks = [];
-	
+	private static bool $cacheEnabled;
+
+	/** @var bool Whether to trim unnecessary whitespace (safe mode) */
+	private static bool $trimWhitespace;
+
+	/** @var bool Whether to remove standard HTML comments (not conditional) */
+	private static bool $removeHtmlComments;
+
+	/** @var bool Whether to allow raw PHP execution via {? ... ?} tags */
+	private static bool $allowPhpTags;
+
 	/** Maximum include recursion depth (prevents circular includes). */
 	private const MAX_INCLUDE_DEPTH = 16;
-	
+
 
 	/**
-	 * Renders a template with the given parameters and compiles it if necessary.
-	 * 
-	 * This method combines initialization and rendering in a single call.
-	 * It sets up the template engine configuration, compiles the template (if needed),
-	 * and includes the generated PHP file with the provided template data.
+	 * Render a template directly (echo to output buffer).
 	 *
-	 * @param string $template The template filename (e.g., 'home.html').
-	 * @param string $template_path The base directory where templates are stored.
-	 * @param bool $cache_enabled Whether to enable template caching.
-	 * @param string $cache_path The directory where compiled templates are stored.
-	 * @param bool $trim_whitespace Whether to remove unnecessary whitespace from the output.
-	 * @param bool $remove_html_comments Whether to strip HTML comments (<!-- ... -->).
-	 * @param array $data Associative array of variables to be available in the template.
+	 * @param string $template Template relative path (e.g., 'home.html')
+	 * @param string $templatePath Base dir for templates
+	 * @param bool $cacheEnabled Enable compiled cache
+	 * @param string $cachePath Base dir for compiled templates
+	 * @param bool $trimWhitespace Collapse whitespace outside sensitive tags
+	 * @param bool $removeHtmlComments Strip <!-- ... --> (not conditional)
+	 * @param array $data Variables exposed to template
+	 * @param bool $allowPhpTags Allow `{? ... ?}` execution blocks
 	 */
-	public static function render(string $template, string $template_path, bool $cache_enabled, string $cache_path, bool $trim_whitespace = false, bool $remove_html_comments = false, array $data = []): void {
-		
-		// Reset stored blocks for template inheritance
-		self::$blocks = [];
-		
-		// Set up template engine configuration
-		self::$template_path = rtrim($template_path, '/') . '/';
-		self::$cache_enabled = $cache_enabled;
-		self::$cache_path = rtrim($cache_path, '/') . '/';
-		self::$trim_whitespace = $trim_whitespace;
-		self::$remove_html_comments = $remove_html_comments;
-		
-		// Compile the template if necessary
-		$compiled_file = self::compile($template);
-		
-		// Extract template variables
+	public static function render(string $template, string $templatePath, bool $cacheEnabled, string $cachePath, bool $trimWhitespace = false, bool $removeHtmlComments = false, array $data = [], bool $allowPhpTags = true): void {
+
+		// Configure engine
+		self::$templatePath = rtrim($templatePath, '/\\') . DIRECTORY_SEPARATOR;
+		self::$cacheEnabled = $cacheEnabled;
+		self::$cachePath = rtrim($cachePath, '/\\') . DIRECTORY_SEPARATOR;
+		self::$trimWhitespace = $trimWhitespace;
+		self::$removeHtmlComments = $removeHtmlComments;
+		self::$allowPhpTags = $allowPhpTags;
+
+		// Compile (if needed) and include
+		$compiledFile = self::compile($template);
+
+		// Extract variables
 		extract($data, EXTR_SKIP);
-		
-		// Extract template variables safer (but slower)
-		// foreach ($data as $key => $value) {
-			// if (!isset($$key)) {
-				// $$key = $value;
-			// }
-		// }
-		
-		// Include the compiled PHP file
-		require $compiled_file;
-	}	
+
+		// Execute compiled template
+		require $compiledFile;
+	}
 
 
 	/**
-	 * Compiles a template file into a cached PHP file.
+	 * Render a template and return the output as a string.
 	 *
-	 * This method checks if the template has already been compiled and is up to date.
-	 * If caching is enabled and the compiled version exists, it returns the cached file.
-	 * Otherwise, it processes the template syntax, applies inheritance, includes, 
-	 * and minifies content before saving the compiled version.
+	 * @param string $template
+	 * @param string $templatePath
+	 * @param bool $cacheEnabled
+	 * @param string $cachePath
+	 * @param bool $trimWhitespace
+	 * @param bool $removeHtmlComments
+	 * @param array $data
+	 * @param bool $allowPhpTags
+	 * @return string
+	 */
+	public static function renderToString(string $template, string $templatePath, bool $cacheEnabled, string $cachePath, bool $trimWhitespace = false, bool $removeHtmlComments = false, array $data = [], bool $allowPhpTags = true): string {
+		ob_start();
+		
+		try {
+			self::render($template, $templatePath, $cacheEnabled, $cachePath, $trimWhitespace, $removeHtmlComments, $data, $allowPhpTags);
+			return (string)ob_get_contents();
+		
+		} finally {
+			// NOTE: Even though there's a "return" above, PHP will always execute "finally"
+			// first (cleanup), then return the prepared value afterwards. This guarantees
+			// ob_end_clean() runs before the function actually returns.
+			ob_end_clean();
+		}
+	}
+
+
+	/**
+	 * Compile a template into a cached PHP file (dependency-aware).
 	 *
-	 * @param string $template The template filename (e.g., 'home.html').
-	 * @return string The full path to the compiled PHP file.
+	 * Cache invalidation strategy:
+	 * - Uses file modification times (mtime) for the source template and all discovered
+	 *   dependencies (extends + includes). If none are newer than the compiled cache,
+	 *   the cached file is reused.
+	 * Rationale:
+	 * - mtime checks are O(1) and very fast; ideal for lightweight runtime environments.
+	 * - In typical deployments (files overwritten or newly written), mtime reliably reflects changes.
+	 * Caveats:
+	 * - If deploy tooling preserves timestamps (e.g., cp -p/rsync --times), cache may not refresh.
+	 *   Ensure deploys update mtimes or add a manual invalidation step.
 	 *
+	 * @param string $template Relative template path
+	 * @return string Absolute path to compiled PHP file
+	 * @throws \RuntimeException
 	 */
 	private static function compile(string $template): string {
 		
-		// Full path to the source template file
-		$source_path = self::$template_path . $template;
+		// Resolve source path
+		$sourcePath = self::resolveTemplate($template);
 		
-		// Generate a unique cache filename by replacing slashes and ".html" to avoid conflicts
-		$cache_file = self::$cache_path . str_replace(['/', '.html'], ['_', ''], $template) . '.php';
+		// Get the name of the cachefile
+		$cacheFile = self::cacheFileName($template);
 
-		// Return cached file if it exists and is up-to-date
-		if (self::$cache_enabled && file_exists($cache_file) && @filemtime($source_path) <= filemtime($cache_file)) {
-			return $cache_file;
-		}		
+		// Load the raw source template from disk
+		$code = file_get_contents($sourcePath);
 
-		// Load and process the template file
-		$code = file_get_contents($source_path);
+		// Strip {# ... #} before scanning so commented {% include %}/{% extends %} don’t count as deps.
+		$code = self::removeTemplateComments($code);
 
-		// Removes template comments ({# ... #}) from the code
-		$code = self::remove_comments($code);
+		// If cache is enabled and a compiled file already exists, we run a
+		// dependency-aware freshness check (mtime-based).
+		// We compute the most recent mtime across the source template and all discovered
+		// dependencies (extends + includes). If the cache file is newer than that max mtime,
+		// we can safely reuse it without recompiling.
+		if (self::$cacheEnabled && is_file($cacheFile)) {
+			// Collect all dependencies (parent layouts + included snippets) from stripped code
+			$deps = self::collectDependencies($code);
 
-		// Processes template inheritance, allowing child templates to extend parent templates
-		$code = self::process_extends($code);
-		
-		// Includes external template files ({% include "file.html" %})
-		$code = self::process_includes($code);
+			// Compute the freshest mtime across source + dependencies
+			$maxMtime = filemtime($sourcePath);
+			foreach ($deps as $rel) {
+				$depPath = self::resolveTemplate($rel);
+				$mt = filemtime($depPath);
+				if ($mt > $maxMtime) $maxMtime = $mt;
+			}
 
-		// Compiles template syntax into PHP code
-		$code = self::compile_syntax($code);
-
-		// Removes HTML comments (<!-- ... -->) if enabled
-		if (self::$remove_html_comments) {
-			$code = self::remove_html_comments($code);
+			// If cache is newer than everything we depend on; we reuse it
+			if ($maxMtime <= filemtime($cacheFile)) {
+				return $cacheFile;
+			}
 		}
 
-		// Removes unnecessary whitespace to optimize output
-		if (self::$trim_whitespace) {
-			$code = preg_replace('/\s+/', ' ', $code);
+		// Build compiled code (we already have $code loaded + comments stripped)
+		$code = self::processExtends($code);   // Resolve inheritance: merges child blocks into parent yields
+		$code = self::processIncludes($code);  // Inline {% include %} recursively (with depth guard)
+		$code = self::compileSyntax($code);    // Compile (translate template tags to PHP)
+
+		if (self::$removeHtmlComments) {
+			$code = self::removeHtmlComments($code);
+		}
+		if (self::$trimWhitespace) {
+			$code = self::safeTrimWhitespace($code);
 		}
 
-		// Save compiled file
-		file_put_contents($cache_file, "<?php class_exists('" . __CLASS__ . "') or exit; ?>\n" . rtrim($code));
-		return $cache_file;
-	}
+		// Prepend a tiny guard and write compiled file
+		$compiled = "<?php class_exists('". __CLASS__ ."') or exit; ?>\n" . rtrim($code);
 
+		// Generate a unique temporary filename inside the cache directory
+		$tmp = self::$cachePath . uniqid('lv_', true) . '.tmp';
 
-	/**
-	 * Processes `{% extends "parent.html" %}` directives for template inheritance.
-	 *
-	 * If a template extends another, this method loads the parent template
-	 * and merges the child template's blocks into it.
-	 *
-	 * @param string $code The child template content.
-	 * @return string The final merged template content.
-	 */
-	private static function process_extends(string $code): string {
-		
-		// Early exit: If no `{% extends` is found, return immediately (no extends to process)
-		if (strpos($code, '{% extends') === false) return $code;
-		
-		// Check if the template contains an `{% extends "..." %}` directive
-		if (preg_match('/{% extends ["\'](.*?)["\'] %}/', $code, $match)) {
-			
-			// Construct the full path to the parent (layout) template
-			$layout_file = self::$template_path . $match[1];
-			
-			// Ensure the layout file exists before proceeding
-			if (file_exists($layout_file)) {
-				
-				// Load the parent template content
-				$layout_code = file_get_contents($layout_file);
-				
-				// Removes template comments ({# ... #}) from the layout_code
-				$layout_code = self::remove_comments($layout_code);
-				
-				// Merge the child template's blocks into the parent layout
-				return self::merge_blocks($layout_code, $code);
+		// Write compiled content to a temporary file with an exclusive lock.
+		// If cache dir is missing or not writable, this will return false.
+		if (file_put_contents($tmp, $compiled, LOCK_EX) === false) {
+			throw new \RuntimeException('LiteView: Cache directory is missing or not writable: ' . self::$cachePath);
+		}
+
+		// Set file permissions (optional, ensures consistent readability)
+		@chmod($tmp, 0644);
+
+		// Atomically rename the temporary file to the final cache filename
+		// This guarantees that the cache file is always either old or new,
+		// never a half-written intermediate state
+		if (!@rename($tmp, $cacheFile)) {
+			@unlink($cacheFile); // Windows may require removing the destination first
+			if (!@rename($tmp, $cacheFile)) { // On Windows; rename may fail if target exists, so we unlink and retry.
+				@unlink($tmp); // Cleanup temp if rename failed
+				throw new \RuntimeException('LiteView: failed to move compiled cache file.');
 			}
 		}
 		
-		// If no `{% extends %}` is found, return the original template unchanged
-		return $code;
+		// If OPcache is enabled; proactively refresh it for this file
+		if (function_exists('opcache_invalidate')) {
+			@opcache_invalidate($cacheFile, true);
+		}
+
+		// Refresh PHP's stat cache for subsequent filemtime/exists checks
+		clearstatcache(true, $cacheFile);
+
+		return $cacheFile;
 	}
 
 
 	/**
-	 * Merges child template blocks into the parent layout.
-	 * 
-	 * This method allows template inheritance by replacing `{% yield block_name %}`
-	 * in the parent layout with content from `{% block block_name %}...{% endblock %}` in the child template.
+	 * Merge parent/child with `{% extends "layout.html" %}` (strict mode).
 	 *
-	 * @param string $layout_code The content of the parent template.
-	 * @param string $child_code The content of the child template.
-	 * @return string The merged template code with blocks replaced.
+	 * Strict guarantees:
+	 * - Throws if the child defines a `{% block %}` that is not yielded in the parent.
+	 * - Throws if the parent contains any `{% yield %}` that the child did not provide.
+	 * - Throws if the child defines the same block name more than once.
+	 *
+	 * Implementation notes:
+	 * - Operates at compile-time: child blocks are spliced into the parent where `{% yield %}` appears.
+	 * - After this merge the block/yield markers are removed (compile-time only; no runtime block stack).
+	 *
+	 * @param string $code Child template code (already comment-stripped upstream)
+	 * @return string Merged code (parent with yields replaced)
+	 * @throws \RuntimeException On missing yields, missing child blocks for yields, or duplicate blocks.
 	 */
-	private static function merge_blocks(string $layout_code, string $child_code): string {
-		
-		// Find all `{% block block_name %} ... {% endblock %}` sections in the child template
-		preg_match_all('/{%\s*block\s*(\w+)\s*%}(.*?){%\s*endblock\s*%}/s', $child_code, $matches, PREG_SET_ORDER);
-		
-		// Loop through all matched blocks and replace `{% yield block_name %}` in the layout
-		foreach ($matches as $match) {
-			$block_name = $match[1]; // Block name (e.g., "content")
-			$block_content = trim($match[2]); // Block content
-			
-			// Replace `{% yield block_name %}` in the parent layout with the block content from the child template
-			$layout_code = preg_replace('/{%\s*yield\s*' . $block_name . '\s*%}/', $block_content, $layout_code);
+	private static function processExtends(string $code): string {
+		// Fast path: no extends → return child code unchanged
+		if (strpos($code, '{% extends') === false) {
+			return $code;
 		}
-		
-		// Return the processed layout with blocks merged
-		return $layout_code;
-	}	
+		// Extract single parent path; if malformed, skip
+		if (!preg_match('/{%\s*extends\s+["\'](.*?)["\']\s*%}/', $code, $m)) {
+			return $code;
+		}
+
+		// Load and sanitize parent (layout)
+		$layoutFile = self::resolveTemplate($m[1]);
+		$layoutCode = file_get_contents($layoutFile);
+		$layoutCode = self::removeTemplateComments($layoutCode);
+
+		// Find all child blocks: {% block name %} ... {% endblock %}
+		preg_match_all('/{%\s*block\s+([\w-]+)\s*%}(.*?){%\s*endblock\s*%}/s', $code, $matches, PREG_SET_ORDER);
+
+		// Track seen block names to detect duplicates early (fail fast)
+		$seen = [];
+
+		// Replace each yielded slot in the parent with the corresponding child block content
+		foreach ($matches as $match) {
+			$name    = $match[1];              // Block name (e.g. "content")
+			$content = trim($match[2]);        // Block content without surrounding whitespace
+			$quoted  = preg_quote($name, '/'); // Escape block name for safe regex usage
+
+			if (isset($seen[$name])) {
+				// Duplicate child block definitions are ambiguous → fail fast
+				throw new \RuntimeException("LiteView: duplicate block '$name' in child template.");
+			}
+			$seen[$name] = true;
+
+			// Replace all {% yield name %} occurrences in the parent
+			$replaced = preg_replace('/{%\s*yield\s*' . $quoted . '\s*%}/', $content, $layoutCode, -1, $count);
+
+			// preg_replace() may return null on internal regex error (rare) → fail fast
+			if ($replaced === null) {
+				throw new \RuntimeException("LiteView: regex replace failed for block '$name'.");
+			}
+			$layoutCode = $replaced;
+
+			// Strict: child provided a block that the parent never yielded → fail fast
+			if ($count === 0) {
+				throw new \RuntimeException("LiteView: block '$name' not yielded in parent template: " . $layoutFile);
+			}
+		}
+
+		// Strict: any remaining {% yield name %} in the parent means the child missed a required block
+		if (preg_match_all('/{%\s*yield\s*([\w-]+)\s*%}/', $layoutCode, $leftover) && !empty($leftover[1])) {
+			$missing = array_values(array_unique($leftover[1]));
+			$list    = "'" . implode("', '", $missing) . "'";
+			throw new \RuntimeException("LiteView: missing child blocks for yields {$list} in parent template: " . $layoutFile);
+		}
+
+		return $layoutCode;
+	}
 
 
 	/**
-	 * Processes `{% include "filename" %}` directives and replaces them 
-	 * with the contents of the specified template file.
-	 * 
-	 * This allows templates to reuse common components like headers, footers, or widgets.
+	 * Process `{% include "..." %}` recursively (with depth guard).
 	 *
-	 * @param string $code The template code containing `{% include "file.html" %}` directives.
-	 * @return string Processed template code with included files inserted.
-	 */	
-	private static function process_includes(string $code, int $depth = 0): string {
-		
-		// Fast path: nothing to do
-		if (strpos($code, '{% include') === false) return $code;
-
-		// Prevent circular includes
-		if ($depth >= self::MAX_INCLUDE_DEPTH) {
-			throw new \RuntimeException('LiteView include depth exceeded.');
+	 * @param string $code
+	 * @param int $depth
+	 * @return string
+	 */
+	private static function processIncludes(string $code, int $depth = 0): string {
+		if (strpos($code, '{% include') === false) {
+			return $code;
 		}
-
-		// Search for `{% include "filename" %}` and replace it with the actual file contents
-		return preg_replace_callback('/{% include ["\'](.*?)["\'] %}/i', function ($matches) use ($depth) {
-
-			// Load the content of the included template file
-			$include_code = file_get_contents(self::$template_path . $matches[1]);
-
-			// Strip comments in the snippet to avoid activating commented includes
-			$include_code = self::remove_comments($include_code);
-
-			// Recurse: process includes inside the snippet
-			$include_code = self::process_includes($include_code, $depth + 1);
-
-			return $include_code;
+		if ($depth >= self::MAX_INCLUDE_DEPTH) {
+			throw new \RuntimeException('LiteView: include depth exceeded.');
+		}
+		return preg_replace_callback('/{%\s*include\s+["\'](.*?)["\']\s*%}/i', function(array $m) use ($depth) {
+			$incPath = self::resolveTemplate($m[1]);
+			$incCode = file_get_contents($incPath);
+			$incCode = self::removeTemplateComments($incCode);
+			$incCode = self::processIncludes($incCode, $depth + 1);
+			return $incCode;
 		}, $code);
 	}
-	
+
 
 	/**
-	 * Compiles template syntax into executable PHP code.
+	 * Compile template tags to PHP.
 	 *
-	 * This method converts template-specific syntax (e.g., `{% if %}`, `{{ variable }}`) 
-	 * into native PHP code, allowing templates to be compiled and executed efficiently.
+	 * Supported:
+	 * - {?= expr ?}      echo expression
+	 * - {? code ?}       raw PHP code (if allowed)
+	 * - {{ expr }}       escaped echo
+	 * - {{{ expr }}}     raw echo (unescaped)
+	 * - {% if/elseif/else/endif %}, {% foreach(... ) %}/{% endforeach %},
+	 * // - {% block name %} ... {% endblock %}, {% yield name %}
 	 *
-	 * @param string $code Template code containing custom syntax.
-	 * @return string Compiled PHP code.
+	 * NOTE: Block/Yield syntax stripped to no-op after processExtends().
+	 * Old code was:
+	 * '/{%\s*block\s+([\w-]+)\s*%}/'     => '<?php ob_start(); ?>',
+	 * '/{%\s*endblock\s*%}/'             => '<?php self::$blocks[isset($block_name)?$block_name:array_key_last(self::$blocks)] = isset($block_name)?ob_get_clean():ob_get_clean(); ?>',
+	 * '/{%\s*yield\s*([\w-]+)\s*%}/'     => '<?php echo self::$blocks["$1"] ?? ""; ?>',
+	 * If you ever want to restore old behavior: Remember to add "private static array $blocks = [];" at the beginning of the class and "self::$blocks = [];" in the beginning of render()
+	 *
+	 * @param string $code
+	 * @return string
 	 */
-	private static function compile_syntax(string $code): string {
+	private static function compileSyntax(string $code): string {
 		$patterns = [
-		
-			// Executes and outputs (echo) the result of a PHP expression: {?= ... ?}
+			
+			// Echo expression
 			'/{\?=\s*(.+?)\s*\?}/s' => '<?php echo $1; ?>',
-		
-			// Execute PHP code (no output): {? ... ?}
-			'/{\?(.+?)\?}/s' => '<?php $1 ?>',
-		
-			// Block definition: {% block name %}
-			'/{%\s*block\s+([\w-]+)\s*%}/' => '<?php ob_start(); self::$blocks["$1"] = ""; ?>',
 			
-			// Block end: {% endblock %}
-			'/{%\s*endblock\s*%}/' => '<?php self::$blocks[array_key_last(self::$blocks)] = ob_get_clean(); ?>',
-			
-			// Block yield (output block content): {% yield name %}
-			'/{%\s*yield\s*(\w+)\s*%}/' => '<?php echo self::$blocks["$1"] ?? ""; ?>',
-			
-			// Unescaped variable output: {{{ variable }}}
-			'/\{\{\{\s*(.+?)\s*\}\}\}/' => '<?php echo $1; ?>',
-			
-			// Escaped variable output: {{ variable }} (HTML-escaped)
-			'/\{\{\s*(.+?)\s*\}\}/' => '<?php echo htmlspecialchars($1 ?? "", ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8"); ?>',
-			
-			// Conditional statements:
-			'/{%\s*if\s*(.+?)\s*%}/' => '<?php if ($1): ?>',
-			'/{%\s*elseif\s*(.+?)\s*%}/' => '<?php elseif ($1): ?>',
-			'/{%\s*else\s*%}/' => '<?php else: ?>',
-			'/{%\s*endif\s*%}/' => '<?php endif; ?>',
-			
-			// Looping constructs:
-			'/{%\s*foreach\s*\((.+?)\)\s*%}/' => '<?php foreach ($1): ?>',
-			'/{%\s*endforeach\s*%}/' => '<?php endforeach; ?>',
+			// Raw PHP block (optional)
+			'/{\?(.+?)\?}/s'        => self::$allowPhpTags ? '<?php $1 ?>' : ' ',
+
+			// Blocks/yields (runtime block store)
+			// NOTE: Block/ yield markers are resolved at compile-time in processExtends().
+			// Thus, at this stage they are redundant, so we strip them to avoid double behavior.
+			// This keeps runtime fast, predictable, and free of ob_start/ob_get_clean overhead.
+			// In short: blocks already merged -> so markers removed (no runtime block system).
+			'/{%\s*block\s+([\w-]+)\s*%}/'     => '',
+			'/{%\s*endblock\s*%}/'             => '',
+			'/{%\s*yield\s*([\w-]+)\s*%}/'     => '',
+
+			// Escaped vs raw echo
+			'/\{\{\{\s*(.+?)\s*\}\}\}/s'       => '<?php echo $1; ?>',
+			'/\{\{\s*(.+?)\s*\}\}/s'           => '<?php echo htmlspecialchars($1 ?? "", ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8"); ?>',
+
+			// Conditionals
+			'/{%\s*if\s*(.+?)\s*%}/'           => '<?php if ($1): ?>',
+			'/{%\s*elseif\s*(.+?)\s*%}/'       => '<?php elseif ($1): ?>',
+			'/{%\s*else\s*%}/'                 => '<?php else: ?>',
+			'/{%\s*endif\s*%}/'                => '<?php endif; ?>',
+
+			// Loops
+			'/{%\s*foreach\s*\((.+?)\)\s*%}/'  => '<?php foreach ($1): ?>',
+			'/{%\s*endforeach\s*%}/'           => '<?php endforeach; ?>',
 		];
-		
-		// Apply all regex replacements to the template code
-		return preg_replace(array_keys($patterns), array_values($patterns), $code);
+
+		$compiled = preg_replace(array_keys($patterns), array_values($patterns), $code);
+
+		return $compiled;
 	}
 
 
 	/**
-	 * Removes `{# ... #}` comments from the template while preserving the correct structure.
+	 * Remove `{# ... #}` template comments using a single-pass depth parser (supports nesting).
 	 *
-	 * This function efficiently removes comments from the template without affecting the surrounding
-	 * content. It correctly handles nested comments and ensures that no duplicated content appears.
+	 * Implementation details:
+	 * - Uses a single-pass parser (O(n)) with a depth counter, not regex.
+	 * - Supports nested comments: each `{#` increments depth, each `#}` decrements it.
+	 * - If a comment is left open (while depth > 0), everything after its start is discarded (fail-safe).
+	 * - This guarantees that nested comment blocks are fully removed,
+	 *   leaving no stray `#}` or partial fragments in the output.
 	 *
-	 * - Uses a single pass (`O(n)`) for optimal performance.
-	 * - Supports nested `{# ... #}` comments.
-	 * - Ensures that non-comment content is preserved exactly as in the original template.
+	 * Example:
+	 *   {# outer
+	 *      {# inner #}
+	 *   #}
+	 *   -> (removed completely, yields empty string)
 	 *
-	 * @param string $code The template code containing `{# ... #}` comments.
-	 * @return string The cleaned template code with all comments removed.
+	 * @param string $code (template code containing `{# ... #}` comments)
+	 * @return string (cleaned template code with all comments removed)
 	 */
-	private static function remove_comments(string $code): string {
-				
-		// Early exit: If no `{#` is found, return immediately (no comments to remove)
+	private static function removeTemplateComments(string $code): string {
+		// Fast path: no comment opener, nothing to do
 		if (strpos($code, '{#') === false) {
 			return $code;
 		}
 
-		$len = strlen($code); // Get the length of the template
-		$depth = 0;           // Tracks the nesting level of comments
-		$start = 0;           // Start position for capturing content outside comments
-		$output = '';         // Buffer to store the final cleaned template
+		$len = strlen($code);   // Input length in bytes
+		$depth = 0;             // Current nesting depth of `{# ... #}` blocks
+		$start = 0;             // Last copy position (outside comments)
+		$out = '';              // Output buffer
 
+		// Scan the string once, matching `{#` and `#}` pairs
 		for ($i = 0; $i < $len; $i++) {
-			// Detect the start of a comment block `{#`
+			// Detect comment start `{#}`
 			if ($i < $len - 1 && $code[$i] === '{' && $code[$i + 1] === '#') {
+				// Append non-comment segment before this opener (only at depth 0)
 				if ($depth === 0) {
-					// Append content before the comment starts
-					$output .= substr($code, $start, $i - $start);
+					$out .= substr($code, $start, $i - $start);
 				}
-				$depth++; // Increase nesting level
-				$i++;     // Skip the next character (`#`)
+				$depth++;   // Enter (or go deeper into) a comment block
+				$i++;       // Skip the '#' in `{#`
 				continue;
 			}
 
-			// Detect the end of a comment block `#}`
+			// Detect comment end `#}`
 			if ($i < $len - 1 && $code[$i] === '#' && $code[$i + 1] === '}' && $depth > 0) {
-				$depth--;  // Decrease nesting level
-				$i++;      // Skip the next character (`}`)
-				$start = $i + 1; // Update the start position to resume capturing content
+				$depth--;              // Leave (or go up one level) of comment block
+				$i++;                  // Skip the '}' in `#}`
+				$start = $i + 1;       // Next non-comment text starts after this closer
 				continue;
 			}
 		}
 
-		// Append any remaining content after the last comment
+		// If we ended outside comments, append any trailing non-comment segment
 		if ($depth === 0 && $start < $len) {
-			$output .= substr($code, $start);
+			$out .= substr($code, $start);
 		}
 
-		return $output;
+		return $out;
 	}
 
 
 	/**
-	 * Removes `<!-- ... -->` HTML comments from the template.
-	 * 
-	 * This method ensures that only standard HTML comments are removed, while keeping 
-	 * conditional comments (e.g., `<!--[if IE]> ... <![endif]-->`) intact.
+	 * Remove standard HTML comments while keeping conditional comments.
 	 *
-	 * @param string $code The template content.
-	 * @return string The cleaned template content without standard HTML comments.
+	 * @param string $code
+	 * @return string
 	 */
-	private static function remove_html_comments(string $code): string {
-		// return preg_replace('/<!--.*?-->/s', '', $code);
-		
-		// Regular expression explanation:
-		// - `<!--(?!<!)` ? Match `<!--` only if it's NOT followed by `<`, preserving conditional comments.
-		// - `[^\[>].*?` ? Match everything inside the comment, ensuring it's not an IE conditional comment.
-		// - `-->` ? Ensure it ends with `-->`.
-		// - `s` modifier ? Allows `.` to match newlines, so multi-line comments are removed properly.
+	private static function removeHtmlComments(string $code): string {
 		return preg_replace('/<!--(?!<!)[^\[>].*?-->/s', '', $code);
 	}
 
 
 	/**
-	 * Clears all cached templates.
+	 * Collapse redundant whitespace in HTML output while preserving sensitive tags.
+	 *
+	 * Sensitive tags are <pre>, <code>, <textarea>, <script>, and <style>.
+	 * Inside those, whitespace must be preserved exactly.
+	 *
+	 * @param string $html (the compiled template HTML)
+	 * @return string (optimized HTML with collapsed whitespace outside sensitive tags)
 	 */
-	public static function clear_cache(): void {
-		
-		// Get all compiled template files (*.php) in the cache directory
-		// If glob() returns false (no matches), use an empty array to avoid errors
-		$files = glob(self::$cache_path . "*.php") ?: [];
-		
-		// Delete each cached file
+	private static function safeTrimWhitespace(string $html): string {
+	
+		// Split HTML into chunks: alternating between "safe zones" (outside) and "sensitive zones" (inside)
+		$parts = preg_split(
+			'#(<(?:pre|code|textarea|script|style)\b[^>]*>.*?</(?:pre|code|textarea|script|style)>)#si',
+			$html,
+			-1,
+			PREG_SPLIT_DELIM_CAPTURE
+		);
+
+		// preg_split() can return false on failure → fall back to original HTML
+		if ($parts === false) {
+			return $html;
+		}
+
+		// Iterate through chunks
+		foreach ($parts as $i => $chunk) {
+			// Even indexes = outside sensitive tags → safe to collapse
+			if (($i % 2) === 0) {
+				// Replace runs of 2+ whitespace chars with a single space
+				// This avoids breaking inline markup while reducing size
+				$parts[$i] = preg_replace('/\s{2,}/', ' ', $chunk);
+			}
+			// Odd indexes = inside sensitive tags → leave untouched
+		}
+
+		// Recombine and return cleaned HTML
+		return implode('', $parts);
+	}
+
+
+	/**
+	 * Collect all template dependencies (extends + recursive includes).
+	 *
+	 * Overview:
+	 * - Parses the given (already comment-stripped) template code and finds:
+	 *   - A single `{% extends "..." %}` parent (if present)
+	 *   - Zero or more `{% include "..." %}` snippets
+	 * - For each discovered dependency, the file is loaded, template comments are stripped,
+	 *   and the function recurses to discover *its* dependencies.
+	 *
+	 * Cycle safety:
+	 * - Uses a visited-set (by reference) to prevent infinite recursion on circular graphs,
+	 *   e.g. A → B and B → A. Each relative path is processed at most once.
+	 *
+	 * Freshness checks:
+	 * - This function only *collects* relative dependency paths. The caller (compile())
+	 *   is responsible for comparing their mtimes, not this function.
+	 *
+	 * Input contract:
+	 * - `$code` is expected to be the *comment-stripped* source of the current template
+	 *   (so commented-out `{% include %}`/`{% extends %}` do not count).
+	 *
+	 * @param string $code     Template code to scan (ideally already comment-stripped)
+	 * @param array<string, true> $visited Internal visited-set keyed by relative path (do not pass manually)
+	 * @return array<int, string> Ordered, de-duplicated list of relative dependency paths
+	 *
+	 * @throws \RuntimeException If a resolved dependency path is outside the template root
+	 *                           (bubbled up from resolveTemplate()).
+	 */
+	private static function collectDependencies(string $code, array &$visited = []): array {
+		$deps = [];
+
+		// --- Handle `{% extends "..." %}` (at most one by design) ------------------
+		// We only look for the *first* extends directive; additional ones (if any)
+		// would be ignored, mirroring typical template engines.
+		if (preg_match('/{%\s*extends\s+["\'](.*?)["\']\s*%}/', $code, $m)) {
+			$parentRel = $m[1];
+
+			// Process the parent only once (cycle-safe)
+			if (!isset($visited[$parentRel])) {
+				$visited[$parentRel] = true;
+				$deps[] = $parentRel;
+
+				// Resolve absolute path under template root and load the file
+				$parentAbs  = self::resolveTemplate($parentRel);
+				$parentCode = file_get_contents($parentAbs);
+
+				// Strip template comments so commented includes/extends aren't counted downstream
+				$parentCode = self::removeTemplateComments($parentCode);
+
+				// Recurse into the parent's dependencies
+				$deps = array_merge($deps, self::collectDependencies($parentCode, $visited));
+			}
+		}
+
+		// --- Handle `{% include "..." %}` (zero or more) ---------------------------
+		if (preg_match_all('/{%\s*include\s+["\'](.*?)["\']\s*%}/i', $code, $matches)) {
+			// $matches[1] is an array of all captured include paths
+			foreach ($matches[1] as $incRel) {
+
+				// Process this include only once (cycle-safe)
+				if (isset($visited[$incRel])) {
+					continue;
+				}
+				$visited[$incRel] = true;
+				$deps[] = $incRel;
+
+				// Resolve absolute path and load, then strip comments
+				$incAbs  = self::resolveTemplate($incRel);
+				$incCode = file_get_contents($incAbs);
+				$incCode = self::removeTemplateComments($incCode);
+
+				// Recurse into nested includes / further extends
+				$deps = array_merge($deps, self::collectDependencies($incCode, $visited));
+			}
+		}
+
+		// At this point `$deps` is already de-duplicated thanks to `$visited`.
+		// Preserve discovery order for deterministic mtime comparisons.
+		return $deps;
+	}
+
+
+	/**
+	 * Resolve a template path safely relative to the configured template root.
+	 *
+	 * @param string $relative
+	 * @return string Absolute, normalized path under template root
+	 * @throws \RuntimeException
+	 */
+	private static function resolveTemplate(string $relative): string {
+		$base = self::$templatePath;
+		$root = realpath($base);
+		if ($root === false) {
+			throw new \RuntimeException('LiteView: invalid template root.');
+		}
+
+		$target = realpath($base . $relative);
+		$rootWithSep = rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+		// Require that the resolved path starts with "<root>/" to avoid
+		// prefix false-positives like "/path/templatesX" matching "/path/templates".
+		if ($target === false || strpos($target, $rootWithSep) !== 0) {
+			throw new \RuntimeException('LiteView: illegal template path: ' . $relative);
+		}
+		return $target;
+	}
+
+
+	/**
+	 * Generate a stable cache filename for a template.
+	 *
+	 * @param string $relative
+	 * @return string
+	 */
+	private static function cacheFileName(string $relative): string {
+		$slug = preg_replace('/[^A-Za-z0-9_]+/', '_', strtr($relative, ['\\' => '/', '/' => '_']));
+		$hash = substr(sha1($relative), 0, 8);
+		return self::$cachePath . $slug . '_' . $hash . '.php';
+	}
+
+
+	/**
+	 * Clear all compiled templates in cache directory (*.php).
+	 * Requires cache directory to be dedicated to compiled templates.
+	 */
+	public static function clearCache(): void {
+		$glob = glob(self::$cachePath . '*.php');
+		$files = $glob ?: [];
 		array_map('unlink', $files);
 	}
 }
