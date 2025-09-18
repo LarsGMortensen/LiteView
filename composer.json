@@ -1,18 +1,54 @@
 {
-  "name": "larsgmortensen/liteview",
-  "description": "Lightweight HTML view renderer for PHP",
-  "type": "library",
-  "license": "GPL-3.0-or-later",
-  "autoload": {
-    "psr-4": {
-      "LiteView\\": "src/"
-    }
-  },
-  "authors": [
-    {
-      "name": "Lars Grove Mortensen",
-      "homepage": "https://github.com/LarsGMortensen"
-    }
-  ],
-  "require": {}
+	"name": "larsgmortensen/liteview",
+	"description": "Lightweight PHP template engine with compile-time inheritance and caching.",
+	"type": "library",
+	"license": "GPL-3.0-or-later",
+	"homepage": "https://github.com/LarsGMortensen/LiteView",
+	"keywords": [
+		"php",
+		"template",
+		"templating",
+		"view",
+		"engine",
+		"caching",
+		"inheritance",
+		"lightweight"
+	],
+	"require": {
+		"php": "^8.1"
+	},
+	"autoload": {
+		"psr-4": {
+			"LiteView\\": "src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Lars Grove Mortensen",
+			"homepage": "https://github.com/LarsGMortensen"
+		}
+	],
+	"support": {
+		"issues": "https://github.com/LarsGMortensen/LiteView/issues",
+		"source": "https://github.com/LarsGMortensen/LiteView"
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"sort-packages": true
+	},
+	"archive": {
+		"exclude": [
+			"/.github",
+			"/tests",
+			"/benchmarks",
+			"/examples",
+			"/docs",
+			"/.editorconfig",
+			"/.gitattributes",
+			"/.gitignore",
+			"/Makefile",
+			"/docker",
+			"/vendor"
+		]
+	}
 }
