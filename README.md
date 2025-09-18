@@ -8,17 +8,29 @@ It offers a very **low overhead** and an intuitive syntax inspired by other mode
 ## 🚀 Features that make LiteView stand out
 
 ✔ **Blazing-fast compilation** – Templates are turned into pure, optimized PHP with near-zero overhead.
+
 ✔ **Smart caching** – Dependency-aware cache with atomic writes and OPcache refresh ensures instant, safe performance boosts.
+
 ✔ **Elegant inheritance and includes** – {% extends %}, {% block %}, {% yield %} and {% include %} for clean, DRY layouts – with strict fail-fast validation to catch mistakes early.
+
 ✔ **Modern syntax** – Write templates using {% if %}, {% foreach %}, {{ variable }}, {{{ raw }}}, and {?= expr ?} – simple, powerful, familiar.
+
 ✔ **Conditionals & Loops** – Native `{% if %}`, `{% foreach %}`, and `{% endif %}` syntax.
+
 ✔ **Safe Output** – Escaping with `{{ variable }}` to prevent XSS attacks.
+
 ✔ **Secure by default** – Automatic HTML-escaping prevents XSS, while trusted raw output is still available when needed.
+
 ✔ **Lightweight by design** – Single file, zero dependencies, fully static API. Perfect for performance-critical apps.
+
 ✔ **Configurable flexibility** – Toggle whitespace trimming, HTML comment removal, and PHP block support.
+
 ✔ **Production-ready** – Strict error handling, safe path resolution, and reliable cache invalidation built-in.
+
 ✔ **Minimal Overhead** – Designed for maximum performance with no dependencies.
+
 ✔ **Static API** – Fully static, no instantiation required.
+
 ✔ **Developer friendly** – No bootstrapping, no learning curve – just drop in and start rendering.
 
 ---
