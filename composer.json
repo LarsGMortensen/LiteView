@@ -1,6 +1,6 @@
 {
 	"name": "larsgmortensen/liteview",
-	"description": "Lightweight PHP template engine with compile-time inheritance and caching.",
+	"description": "Lightweight PHP template engine with compile-time inheritance and dependency-aware caching.",
 	"type": "library",
 	"license": "GPL-3.0-or-later",
 	"homepage": "https://github.com/LarsGMortensen/LiteView",
@@ -15,7 +15,7 @@
 		"lightweight"
 	],
 	"require": {
-		"php": "^8.1"
+		"php": ">=8.1"
 	},
 	"autoload": {
 		"psr-4": {
@@ -36,9 +36,12 @@
 		"optimize-autoloader": true,
 		"sort-packages": true
 	},
+	"minimum-stability": "stable",
+	"prefer-stable": true,
 	"archive": {
 		"exclude": [
 			"/.github",
+			"/backups",
 			"/tests",
 			"/benchmarks",
 			"/examples",
@@ -47,7 +50,6 @@
 			"/.gitattributes",
 			"/.gitignore",
 			"/Makefile",
-			"/docker",
 			"/vendor"
 		]
 	}
