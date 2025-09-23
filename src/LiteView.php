@@ -7,7 +7,7 @@
  * LiteView is a single-file PHP class for compiling and rendering lightweight 
  * template files with support for caching, includes, and template inheritance.
  * 
- * LiteView is free software: you can redistribute it and/or modify
+ * LiteView is free software: You can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -27,14 +27,14 @@ namespace LiteView;
 
 
 /**
- * LiteView — Lightweight PHP template engine.
+ * LiteView - Lightweight PHP template engine.
  *
  * LiteView is a minimal, single-file template compiler designed for high performance
  * and low overhead. It provides template inheritance, includes, variable output,
  * and basic control structures using a compact syntax.
  *
  * ## Key Features
- * - Zero dependencies: self-contained, PSR-4 compatible.
+ * - Zero dependencies: Self-contained, PSR-4 compatible.
  * - Template inheritance: `{% extends "layout.html" %}`, `{% block name %}`, `{% yield name %}`.
  * - Includes: `{% include "snippet.html" %}` with recursion depth protection.
  * - Variable output:
@@ -45,7 +45,7 @@ namespace LiteView;
  * - Comment removal:
  *   - Template comments `{# ... #}`
  *   - HTML comments `<!-- ... -->` (optional, safe for conditional comments).
- * - Whitespace trimming: optional, skips sensitive tags (<pre>, <code>, <textarea>, <script>, <style>).
+ * - Whitespace trimming: Optional, skips sensitive tags (<pre>, <code>, <textarea>, <script>, <style>).
  * - Caching:
  *   - Compiles templates to PHP files in a cache directory.
  *   - Dependency-aware cache invalidation (extends + includes).
@@ -91,7 +91,7 @@ namespace LiteView;
  * - {@see LiteView::clearCache()}     Delete all compiled templates in cache.
  *
  * ## Limitations
- * - Not sandboxed: do not expose to untrusted template authors.
+ * - Not sandboxed: Do not expose to untrusted template authors.
  * - Feature scope is deliberately minimal (no filters/tests/extensions).
  *   Intended for lightweight apps, not as a Twig replacement.
  *
@@ -238,7 +238,7 @@ class LiteView {
 		}
 
 		// Build compiled code (we already have $code loaded + comments stripped)
-		$code = self::processExtends($code);   // Resolve inheritance: merges child blocks into parent yields
+		$code = self::processExtends($code);   // Resolve inheritance: Merges child blocks into parent yields
 		$code = self::processIncludes($code);  // Inline {% include %} recursively (with depth guard)
 		$code = self::compileSyntax($code);    // Compile (translate template tags to PHP)
 
@@ -296,7 +296,7 @@ class LiteView {
 	 * - Throws if the child defines the same block name more than once.
 	 *
 	 * Implementation notes:
-	 * - Operates at compile-time: child blocks are spliced into the parent where `{% yield %}` appears.
+	 * - Operates at compile-time: Child blocks are spliced into the parent where `{% yield %}` appears.
 	 * - After this merge the block/yield markers are removed (compile-time only; no runtime block stack).
 	 *
 	 * @param string $code Child template code (already comment-stripped upstream)
@@ -304,7 +304,7 @@ class LiteView {
 	 * @throws \RuntimeException On missing yields, missing child blocks for yields, or duplicate blocks.
 	 */
 	private static function processExtends(string $code): string {
-		// Fast path: no extends → return child code unchanged
+		// Fast path: No extends -> return child code unchanged
 		if (strpos($code, '{% extends') === false) {
 			return $code;
 		}
@@ -331,31 +331,31 @@ class LiteView {
 			$quoted  = preg_quote($name, '/'); // Escape block name for safe regex usage
 
 			if (isset($seen[$name])) {
-				// Duplicate child block definitions are ambiguous → fail fast
-				throw new \RuntimeException("LiteView: duplicate block '$name' in child template.");
+				// Duplicate child block definitions are ambiguous -> fail fast
+				throw new \RuntimeException("LiteView: Duplicate block '$name' in child template.");
 			}
 			$seen[$name] = true;
 
 			// Replace all {% yield name %} occurrences in the parent
 			$replaced = preg_replace('/{%\s*yield\s*' . $quoted . '\s*%}/', $content, $layoutCode, -1, $count);
 
-			// preg_replace() may return null on internal regex error (rare) → fail fast
+			// preg_replace() may return null on internal regex error (rare) -> fail fast
 			if ($replaced === null) {
-				throw new \RuntimeException("LiteView: regex replace failed for block '$name'.");
+				throw new \RuntimeException("LiteView: Regex replace failed for block '$name'.");
 			}
 			$layoutCode = $replaced;
 
-			// Strict: child provided a block that the parent never yielded → fail fast
+			// Strict: child provided a block that the parent never yielded -> fail fast
 			if ($count === 0) {
-				throw new \RuntimeException("LiteView: block '$name' not yielded in parent template: " . $layoutFile);
+				throw new \RuntimeException("LiteView: Block '$name' not yielded in parent template: " . $layoutFile);
 			}
 		}
 
-		// Strict: any remaining {% yield name %} in the parent means the child missed a required block
+		// Strict: Any remaining {% yield name %} in the parent means the child missed a required block
 		if (preg_match_all('/{%\s*yield\s*([\w-]+)\s*%}/', $layoutCode, $leftover) && !empty($leftover[1])) {
 			$missing = array_values(array_unique($leftover[1]));
 			$list    = "'" . implode("', '", $missing) . "'";
-			throw new \RuntimeException("LiteView: missing child blocks for yields {$list} in parent template: " . $layoutFile);
+			throw new \RuntimeException("LiteView: Missing child blocks for yields {$list} in parent template: " . $layoutFile);
 		}
 
 		return $layoutCode;
@@ -374,7 +374,7 @@ class LiteView {
 			return $code;
 		}
 		if ($depth >= self::MAX_INCLUDE_DEPTH) {
-			throw new \RuntimeException('LiteView: include depth exceeded.');
+			throw new \RuntimeException('LiteView: Include depth exceeded.');
 		}
 		return preg_replace_callback('/{%\s*include\s+["\'](.*?)["\']\s*%}/i', function(array $m) use ($depth) {
 			$incPath = self::resolveTemplate($m[1]);
@@ -420,7 +420,7 @@ class LiteView {
 			// NOTE: Block/ yield markers are resolved at compile-time in processExtends().
 			// Thus, at this stage they are redundant, so we strip them to avoid double behavior.
 			// This keeps runtime fast, predictable, and free of ob_start/ob_get_clean overhead.
-			// In short: blocks already merged -> so markers removed (no runtime block system).
+			// In short; blocks already merged -> so markers removed (no runtime block system).
 			'/{%\s*block\s+([\w-]+)\s*%}/'     => '',
 			'/{%\s*endblock\s*%}/'             => '',
 			'/{%\s*yield\s*([\w-]+)\s*%}/'     => '',
@@ -451,7 +451,7 @@ class LiteView {
 	 *
 	 * Implementation details:
 	 * - Uses a single-pass parser (O(n)) with a depth counter, not regex.
-	 * - Supports nested comments: each `{#` increments depth, each `#}` decrements it.
+	 * - Supports nested comments: Each `{#` increments depth, each `#}` decrements it.
 	 * - If a comment is left open (while depth > 0), everything after its start is discarded (fail-safe).
 	 * - This guarantees that nested comment blocks are fully removed,
 	 *   leaving no stray `#}` or partial fragments in the output.
@@ -466,7 +466,7 @@ class LiteView {
 	 * @return string (cleaned template code with all comments removed)
 	 */
 	private static function removeTemplateComments(string $code): string {
-		// Fast path: no comment opener, nothing to do
+		// Fast path: No comment opener, nothing to do
 		if (strpos($code, '{#') === false) {
 			return $code;
 		}
@@ -529,7 +529,7 @@ class LiteView {
 	 */
 	private static function safeTrimWhitespace(string $html): string {
 	
-		// Split HTML into chunks: alternating between "safe zones" (outside) and "sensitive zones" (inside)
+		// Split HTML into chunks: Alternating between "safe zones" (outside) and "sensitive zones" (inside)
 		$parts = preg_split(
 			'#(<(?:pre|code|textarea|script|style)\b[^>]*>.*?</(?:pre|code|textarea|script|style)>)#si',
 			$html,
@@ -537,20 +537,20 @@ class LiteView {
 			PREG_SPLIT_DELIM_CAPTURE
 		);
 
-		// preg_split() can return false on failure → fall back to original HTML
+		// preg_split() can return false on failure -> fall back to original HTML
 		if ($parts === false) {
 			return $html;
 		}
 
 		// Iterate through chunks
 		foreach ($parts as $i => $chunk) {
-			// Even indexes = outside sensitive tags → safe to collapse
+			// Even indexes = outside sensitive tags -> safe to collapse
 			if (($i % 2) === 0) {
 				// Replace runs of 2+ whitespace chars with a single space
 				// This avoids breaking inline markup while reducing size
 				$parts[$i] = preg_replace('/\s{2,}/', ' ', $chunk);
 			}
-			// Odd indexes = inside sensitive tags → leave untouched
+			// Odd indexes = inside sensitive tags -> leave untouched
 		}
 
 		// Recombine and return cleaned HTML
@@ -570,7 +570,7 @@ class LiteView {
 	 *
 	 * Cycle safety:
 	 * - Uses a visited-set (by reference) to prevent infinite recursion on circular graphs,
-	 *   e.g. A → B and B → A. Each relative path is processed at most once.
+	 *   e.g. A -> B and B -> A. Each relative path is processed at most once.
 	 *
 	 * Freshness checks:
 	 * - This function only *collects* relative dependency paths. The caller (compile())
@@ -652,7 +652,7 @@ class LiteView {
 		$base = self::$templatePath;
 		$root = realpath($base);
 		if ($root === false) {
-			throw new \RuntimeException('LiteView: invalid template root.');
+			throw new \RuntimeException('LiteView: Invalid template root.');
 		}
 
 		$target = realpath($base . $relative);
@@ -661,7 +661,7 @@ class LiteView {
 		// Require that the resolved path starts with "<root>/" to avoid
 		// prefix false-positives like "/path/templatesX" matching "/path/templates".
 		if ($target === false || strpos($target, $rootWithSep) !== 0) {
-			throw new \RuntimeException('LiteView: illegal template path: ' . $relative);
+			throw new \RuntimeException('LiteView: Illegal template path: ' . $relative);
 		}
 		return $target;
 	}
