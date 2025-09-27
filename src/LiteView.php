@@ -1,27 +1,13 @@
 <?php
-/**
- * LiteView - Lightweight PHP template engine
- * 
- * Copyright (C) 2025 Lars Grove Mortensen. All rights reserved.
- * 
- * LiteView is a single-file PHP class for compiling and rendering lightweight 
- * template files with support for caching, includes, and template inheritance.
- * 
- * LiteView is free software: You can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * LiteView is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with LiteView. If not, see <https://www.gnu.org/licenses/>.
- */
-
 declare(strict_types=1);
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (C) 2021-2025 Lars Grove Mortensen
+ *
+ * LiteView - A Lightweight & High-Performance PHP Template Engine
+ * Source:  https://github.com/larsgmortensen/liteview
+ * License: See the LICENSE file for full terms.
+ */
 
 namespace LiteView;
 
@@ -211,7 +197,7 @@ class LiteView {
 		// Load the raw source template from disk
 		$code = file_get_contents($sourcePath);
 
-		// Strip {# ... #} before scanning so commented {% include %}/{% extends %} don’t count as deps.
+		// Strip {# ... #} before scanning so commented {% include %}/{% extends %} don't count as deps.
 		$code = self::removeTemplateComments($code);
 
 		// If cache is enabled and a compiled file already exists, we run a
